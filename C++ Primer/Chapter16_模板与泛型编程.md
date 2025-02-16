@@ -101,4 +101,86 @@ Blob<int> ia;  // BlobPtr<int>和operator==<int>都是本对象的友元
   ct = Foo::count(); // 正确用法：autop ct = Foo<int>::count();
   ```
 
-### 16.1.3 模板参数与作用域
+### 16.1.3 模板参数
+
+- 在模板内不能重用模板参数名。
+
+- <mark>一个特定文件所需要的所有模板的声明，通常一起放置在文件开始位置，出现于任何使用这些模板的代码之前。</mark>
+
+- <mark>当我们希望通知编译器一个名字表示类型时，必须使用关键字typename，而不能使用class。</mark>
+
+  ```C++
+  // top函数期待一个容器类型的实参，使用typename指定其返回类型
+  template <typename T>
+  typename T::value_type top(const T& c)
+  {
+      if (!c.empty()) {
+          return c.back();
+      } else {
+          return typename T::value_type();
+      }
+  }
+  ```
+
+  > 在普通（非模板）代码中，编译器掌握类的定义，所以知道通过作用域运算符访问的名字是类型还是static成员；<mark>但类似`T::mem`这样的代码，不知道mem是一个类型成员，还是一个static成员，直至实例化才知道。</mark>
+
+- 可以为函数模板和类模板提供默认实参。如果一个类模板为其所有模板参数都提供了默认实参，且我们希望使用这些默认实参，就必须在模板名之后跟一个空尖括号对。
+
+  ```c++
+  template <class T = int> class Numbers {}; // T默认为int
+  Numbers<> average_precision; // 空<>表示我们希望使用默认类型
+  ```
+
+### 16.1.4 成员模板
+
+- 一个类（无论是普通类还是类模板）可以包含本身是模板的成员函数。这种成员被称为<mark>成员模板</mark>。① 成员模板不能是虚函数；② 对于类模板，成员模板可以有自己的、独立的模板参数。
+
+  ```c++
+  template <typename T> class Blob {
+      template <typename It> Blob(It b, It e);
+      // ...
+  }
+  
+  // 类模板外定义成员模板
+  template <typename T>  // 类的类型参数
+  template <typename It> // 构造函数的类型参数
+      Blob<T>::Blob(It b, It e) : ..
+  ```
+
+### 16.1.5 控制实例化
+
+- 对每个实例化声明，在程序的某个位置必须有其显式的实例化定义（非extern）。
+
+  ```C++
+  extern template class Blob<string> // 实例化声明
+  template int compare(const int&, const int&); // 实例化定义
+  
+  // 举例
+  // Application.cc 需要将templateBuild.o和Application.o链接到一起
+  extern template class Blob<string>;
+  extern template int compare(const int&, const int&);
+  Blob<string> sa1, sa2; // 实例化会出现在其他位置
+  // Blob<int>及其接受initializer_list的构造函数在本文件中实例化
+  Blob<int> a1 = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  Blob<int> a2(a1); // 拷贝构造函数在本文件中实例化
+  int i = compare(a1[0], a2[0]); // 实例化出现在其他位置
+  
+  // templateBuild.cc
+  template int compare(const int&, const int&);
+  template class Blob<string>; // 实例化类模板的所有成员
+  ```
+
+  文件`Application.o`将包含`Blob<int>`的实例及其接受initializer_list参数的构造函数和拷贝构造函数的实例。而`compare<int>`函数和`Blob<string>`类将不在本文件中进行实例化。这些模板的定义必须出现在程序的其他文件中。
+
+  > ① 因为当模板被使用时才会进行实例化，所以相同的实例可能出现在多个对象文件中 。在多个文件中实例相同模板的额外开销会很严重，需要<mark>显式实例化</mark>。
+  >
+  > ② <mark>当编译器遇到extern模板声明时，它不会在本文将中生成实例化代码</mark>。将一个实例化声明为extern就表示承诺在程序其他位置有该实例化的一个非extern声明（定义）。对于一个给定的实例化版本，可能有多个extern声明，但必须只有一个定义。
+
+- 在一个类模板的实例化定义中，所用类型必须能用于模板的所有成员函数。
+
+### 16.1.6 效率与灵活型
+
+- 在unique_ptr类中，删除器的类型是类类型的一部分。即，unique_ptr有两个模板参数，一个表示它所管理的指针，另一个表示删除器的类型。
+- 通过在编译时绑定删除器，unique_ptr避免了间接调用删除器的运行时开销。通过在运行时绑定删除器，shared_ptr使用户重载删除器更为方便。
+
+## 16.2 模板实参推导
