@@ -184,3 +184,49 @@ Blob<int> ia;  // BlobPtr<int>和operator==<int>都是本对象的友元
 - 通过在编译时绑定删除器，unique_ptr避免了间接调用删除器的运行时开销。通过在运行时绑定删除器，shared_ptr使用户重载删除器更为方便。
 
 ## 16.2 模板实参推导
+
+### 16.2.1 类型转换与模板类型参数
+
+- <mark>将实参传递给带模板类型的函数形参时，能够自动应用的类型转换只有① const转换及② 数组或函数到指针的转换。</mark>
+
+  ```c++
+  template <typename T> T fobj(T, T); // 实参被拷贝
+  template <typename T> T fref(const T&, const T&); // 引用
+  string s1("a value");
+  const string s2("another value");
+  fobj(s1, s2); // ok, s2的const被忽略
+  fref(s1, s2); // ok, 将s1转换为const是允许的
+  
+  int a[10], b[42];
+  fobj(a, b); // ok, 调用f(int*, int*);
+  fref(a, b); // error, 数组类型不匹配。（形参是一个引用，数组不会转换为指针）
+  ```
+
+  > ① const转换：将一个非const对象的引用（或指针）传递给一个const的引用（或指针）形参；
+  >
+  > ② 数组或函数指针转换：<mark>如果函数形参不是引用类型，则可以对数组或函数类型的实参应用正常的指针转换。一个数组实参可以转换为一个指向其首元素的指针</mark>。类似的，一个函数实参可以转换为一个该函数类型的指针。
+
+- 如果函数参数类型不是模板参数，则对实参进行正常的类型转换。
+
+### 16.2.2 函数模板显式实参
+
+- 指定显式模板实参
+
+  ```C++
+  // 编译器无法推断T1，它未出现在函数参数列表中
+  template <typename T1, typename T2, typename T3>
+  T1 sum(T2, T3);
+  ```
+
+  在本例中，没有任何函数实参的类型可用来推断T1的类型。每次调用sum时调用者都必须为T1提供一个显式模板实参（explicit template argument。
+
+  ```C++
+  // T1是显式指定的，T2和T3是从函数实参类型推断而来的
+  auto val3 = sum<long long>(i, lng); // long long sum(int, long)
+  
+  // 糟糕的设计：用户必须指定所有三个模板参数（没有按顺序）
+  template <typename T1, typename T2, typename T3>
+  T3 alternative_sum(T2, T1);
+  ```
+
+### 16.2.3 尾置返回类型与类型转换
