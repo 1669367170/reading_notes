@@ -218,7 +218,7 @@ Blob<int> ia;  // BlobPtr<int>和operator==<int>都是本对象的友元
   T1 sum(T2, T3);
   ```
 
-  在本例中，没有任何函数实参的类型可用来推断T1的类型。每次调用sum时调用者都必须为T1提供一个显式模板实参（explicit template argument。
+  在本例中，没有任何函数实参的类型可用来推断T1的类型。每次调用sum时调用者都必须为T1提供一个显式模板实参（explicit template argument）。
 
   ```C++
   // T1是显式指定的，T2和T3是从函数实参类型推断而来的
@@ -230,3 +230,46 @@ Blob<int> ia;  // BlobPtr<int>和operator==<int>都是本对象的友元
   ```
 
 ### 16.2.3 尾置返回类型与类型转换
+
+- 尾置返回类型场景：并不知道返回结果的准确类型，但知道所需类型是所处理的元素类型。
+
+  ```C++
+  template <typename It>
+  ??? &fcn(It beg, It end)
+  {
+      // 处理序列
+      return *beg; // 返回序列中一个元素的引用
+  }
+  ```
+
+  因为在编译器遇到函数的参数列表之前，beg都是不存在的。为定义此函数，必须使用<mark>尾置返回类型</mark>，来通知编译器fcn的返回类型与解引用beg参数的结果类型相同。
+
+  ```c++
+  // 尾置返回允许我们在参数列表之后声明返回类型
+  template <typename It>
+  auto fcn(It beg, It end) -> decltype(*beg)
+  {
+  	// 处理序列
+  	return *beg; // 返回序列中一个元素的引用
+  }
+  ```
+
+- 进行类型转换的标准模板类
+
+  有时我们无法直接获得所需要的类型。例如，我们可能希望编写一个类似fcn的函数，但返回一个元素的值而非引用。唯一可以使用的操作是迭代器操作，而所有迭代器操作都不会生成元素，只能生成元素的引用。
+
+  <mark>为了获得元素类型，我们可以使用标准库的类型转换（`type transformation`）模板。这些模板定义在头文件`type_traits`中。</mark>
+
+  ```c++
+  // 为了使用模板参数的成员，必须用typename
+  template <typename It>
+  auto fcn2(It beg, It end) -> typename remove_reference<decltype(*beg)>::type // 需要使用typename告知编译器，type表示一个类型
+  {
+      // 处理序列
+      return *beg; // 返回序列中一个元素的拷贝
+  }
+  ```
+
+  常见的标准类型转换模板：`remove_reference`, `add_const`, `add_lvalue_reference`, `add_rvalue_reference`等。<mark>每个模板都有一个名为type的public成员，表示一个类型，此类型与模板自身的模板类型参数相关</mark>。
+
+### 16.2.4 函数指针和实参推断
