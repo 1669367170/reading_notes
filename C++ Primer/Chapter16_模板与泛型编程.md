@@ -273,3 +273,95 @@ Blob<int> ia;  // BlobPtr<int>和operator==<int>都是本对象的友元
   常见的标准类型转换模板：`remove_reference`, `add_const`, `add_lvalue_reference`, `add_rvalue_reference`等。<mark>每个模板都有一个名为type的public成员，表示一个类型，此类型与模板自身的模板类型参数相关</mark>。
 
 ### 16.2.4 函数指针和实参推断
+
+- 当参数是一个函数模板实例的地址时，程序上下文必须满足：对每个模板参数，能唯一确定其类型或值。
+
+  ```c++
+  template <typename T> int compare(const T&, const T&);
+  // pf1指向实例int compare(const int&, const int&);
+  int (*pf1)(const int&, const int&) = compare;
+  
+  // func的重载版本；每个版本接受一个不同的函数指针类型
+  void func(int(*)(const string&, const string&));
+  void func(int(*)(const int&, const int&));
+  func(compare); // 错误：使用compare的哪个实例？
+  
+  // 正确：显式指出实例化哪个compare版本
+  func(compare<int>()); // 传递compare(const int&, const int&);
+  ```
+
+### 16.2.5 模板实参推断和引用 （？）
+
+- 顶层const：变量本身是一个常量。
+
+  ```c++
+  int const a = 10; // a是一个顶层const，值不能被修改
+  const int b = 20; // b也是一个顶层const，值不能被修改
+  ```
+
+- 底层const：指针或引用所指向的对象是否是常量。<mark>当`const`关键字出现在指针或引用的类型说明符的右侧时，它表示的是底层const。底层const意味着指针或引用所指向（或引用的）对象是一个常量，而不是指针或引用本身。</mark>
+
+  ```c++
+  int *const p = &x;  // p是一个指向int的常量指针，p的值（即地址）不能被修改，但*p可以修改 --> 底层const
+  const int *q = &y;  // q是一个指向const int的指针，q的值可以改变，但*q不能被修改 --> 顶层const
+  ```
+
+- 从左值引用函数参数推断类型 —— 函数参数的类型是一个普通的左值引用（T&）
+
+  ```c++
+  template <typename T> void f1(T&); // 实参必须是一个左值
+  // 对f1的调用使用实参所引用的类型作为模板参数类型
+  f1(i);  // i是一个int；模板参数类型T是int
+  f1(ci); // ci是一个const int；模板参数类型是const int
+  f1(5);  // 错误：传递给一个&参数的实参必须是一个左值
+  ```
+
+- 从左值引用函数参数推断类型 —— 函数参数的类型是一个const的左值引用（const T&）
+
+  <mark>可以传递给它任何类型的实参（一个对象（const或非const）、一个临时对象或是一个字面常量值）</mark>
+
+  ```c++
+  template <typename T> void f2(const T&); // 可以接受一个右值
+  // f2中的参数是const &；实参中的const是无关的
+  // 在每个调用中，f2的函数参数都被推断为const int&
+  f2(i);  // i是一个int；模板参数T是int
+  f2(ci); // ci是一个const int，但模板参数T是int
+  f2(5);  // 一个const& 参数可以绑定到一个右值；T是int
+  ```
+
+- 从右值引用函数参数推断类型
+
+  ```C++
+  template <typename T> void f3(T&&);
+  f3(42); // 实参是一个int类型的右值；模板参数T是int
+  ```
+
+- 引用折叠和右值引用参数
+
+  我们不能将一个右值引用绑定到一个左值上。但是，C++语言在正常绑定规则之外定义了两个例外规则，允许这种绑定：
+
+  （1）T&&模板类型参数 + 左值实参 = T&；
+
+  （2）X&&、X&&&、X&&&都折叠成类型X&；类型X&&&&折叠成X&&；
+
+  ```c++
+  f3(i);  // 实参是一个左值；模板参数T是int&
+  f3(ci); // 实参是一个左值；模板参数T是一个const int& 
+  ```
+
+  <mark>如果一个函数参数是指向模板参数类型的右值引用（如，T&&），则可以传递给它任意类型的实参。如果将一个左值传递给这样的参数，则函数参数被实例化为一个普通的左值引用（T&）。</mark>
+
+- 编写接受右值引用参数的模板函数
+
+  ```c++
+  template <typename T> void f3(T&& val)
+  {
+      T t = val; // 拷贝还是绑定一个引用
+      t = fcn(t); // 赋值只改变t还是既改变t又改变val?
+      if (val == t) { /* ... */ }  // 若T是引用类型，则一直为true.
+  }
+  // 当我们对一个右值调用f3时，例如字面常量42，T为int。在此情况下，局部变量t的类型为int，且通过拷贝参数val的值被初始化
+  // 当我们对一个左值i调用f3时，则T为int&。当我们定义并初始化局部变量t时，赋予它类型int&。因此，对t的初始化将其绑定到val。当我们对t赋值时，也同时改变了val的值。在f3的这个实例化版本中，if判断永远得到true
+  ```
+
+### 16.2.6 理解std::move
